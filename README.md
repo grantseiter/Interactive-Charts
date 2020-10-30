@@ -8,9 +8,9 @@ GitHub Repository Link: https://github.com/grantseiter/Interactive-Charts
 ## Notes
 In order to implement the graphic on a static site. Use this html frame:
 
-`<center>
+<center>
 <iframe src="https://grantseiter.github.io/Interactive-Charts/2020-10-30_BidenTaxApp_Figure2_AEIdeas.html" width="640" height="560"></iframe>
-</center>`
+</center>
 
 ## Language
 
