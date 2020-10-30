@@ -2,6 +2,7 @@
 *Repository for hosting Bokeh and other interactive charts on GitHub Pages*
 
 GitHub Pages Site: www.grantseiter.com/Interactive-Charts ; https://grantseiter.github.io/Interactive-Charts
+
 GitHub Repository Link: https://github.com/grantseiter/Interactive-Charts
 
 ## Language
