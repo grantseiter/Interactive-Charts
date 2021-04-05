@@ -20,4 +20,4 @@ Interactive-Charts is a repository for hosting HTML interactives on GitHub. This
 * **2020-11-06_ElectionResults_Beta.html**
 	* This data visualization shows preliminary county level 2020 election results alongside labor market and social variables of interest. All figures were generated at 2020-11-05T13:55:35(EST).
 	* The data visualization is not published.
-	* [Click Here To View](https://grantseiter.com/Interactive-Charts/2020-11-05_ElectionResults_Beta/)
+	* [Click Here To View](https://grantseiter.com/Interactive-Charts/2020-11-06_ElectionResults_Beta/)
