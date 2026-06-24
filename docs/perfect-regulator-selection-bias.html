@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<!--
+  Perfect Regulator -- a potential-outcomes sandbox
+  Grant M. Seiter, Summer Skills Sessions (Causal Inference, Day 1)
+
+  Adapted from Scott Cunningham's "Perfect Doctor Exercise (Mixtape)" spreadsheet
+  (references/cunningham-2025/Perfect Doctor Exercise (Mixtape).xlsx). Same idea:
+  enter both potential outcomes, pick an assignment rule, and watch the ATE, ATT,
+  ATU, SDO, and the SDO decomposition update live. Recast here to an environmental
+  setting (a regulator choosing which contaminated sites to clean up).
+
+  Single self-contained file -- no build step, no dependencies. Drop it in a repo
+  and turn on GitHub Pages (Settings -> Pages -> deploy from branch, /root).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Perfect Regulator &mdash; a potential-outcomes sandbox</title>
+<style>
+  :root{
+    --accent:#00b7ff; --accent2:#871EFF; --ink:#1F292D; --muted:#555F61;
+    --paper:#ffffff; --soft:#f3f4f6; --line:#dfe3e6; --good:#1a7f4b; --bad:#c0392b;
+  }
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       color:var(--ink); margin:0; background:var(--paper); line-height:1.5;}
+  .wrap{max-width:960px; margin:0 auto; padding:28px 20px 80px;}
+  h1{font-size:1.6rem; margin:0 0 4px;}
+  h2{font-size:1.05rem; margin:28px 0 10px; color:var(--accent2);}
+  p.sub{color:var(--muted); margin:0 0 18px;}
+  .controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:8px 0 18px;}
+  label{font-size:.9rem; color:var(--muted);}
+  select,button{font:inherit; padding:7px 11px; border:1px solid var(--line);
+       border-radius:8px; background:var(--soft); cursor:pointer;}
+  button:hover,select:hover{border-color:var(--accent);}
+  button.primary{background:var(--accent2); color:#fff; border-color:var(--accent2);}
+  table{border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums;}
+  th,td{padding:6px 8px; border-bottom:1px solid var(--line); text-align:center;}
+  th{font-size:.78rem; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:600;}
+  td.name{text-align:left; font-weight:600;}
+  input.po{width:64px; text-align:center; font:inherit; border:1px solid var(--line); border-radius:6px; padding:4px;}
+  tr.treated{background:rgba(0,183,255,.08);}
+  .pill{display:inline-block; padding:1px 8px; border-radius:999px; font-size:.78rem; font-weight:600;}
+  .pill.t{background:var(--accent); color:#fff;}
+  .pill.c{background:#e7eaec; color:var(--muted);}
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-top:6px;}
+  .card{border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:var(--soft);}
+  .card .k{font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;}
+  .card .v{font-size:1.5rem; font-weight:700; margin-top:2px;}
+  .decomp{margin-top:14px; padding:14px 16px; border:1px solid var(--line); border-radius:10px;
+       background:#fff; font-size:1.02rem;}
+  .decomp .row{display:flex; flex-wrap:wrap; gap:6px; align-items:baseline; margin:4px 0;}
+  .term{padding:1px 6px; border-radius:6px;}
+  .ate{background:rgba(26,127,75,.14); color:var(--good);}
+  .sel{background:rgba(135,30,255,.12); color:var(--accent2);}
+  .het{background:rgba(192,57,43,.12); color:var(--bad);}
+  .sdo{background:rgba(0,183,255,.14);}
+  .check{margin-top:8px; font-weight:600;}
+  .check.ok{color:var(--good);} .check.no{color:var(--bad);}
+  .note{font-size:.86rem; color:var(--muted); margin-top:6px;}
+  code{background:var(--soft); padding:1px 5px; border-radius:5px; font-size:.9em;}
+  footer{margin-top:34px; font-size:.82rem; color:var(--muted); border-top:1px solid var(--line); padding-top:14px;}
+  a{color:var(--accent2);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>The Perfect Regulator</h1>
+
+  <p style="font-size:.92rem">
+    For each site we imagine a local infant-health index under two states of the world:
+    <b>Y<sup>1</sup></b> if it is cleaned and <b>Y<sup>0</sup></b> if it is not. The
+    individual effect is &delta; = Y<sup>1</sup> &minus; Y<sup>0</sup>. We only ever
+    <em>observe</em> Y = D&middot;Y<sup>1</sup> + (1&minus;D)&middot;Y<sup>0</sup> (the
+    switching equation). Both potential outcomes are visible here only because this is a
+    simulation &mdash; in real data one column is always missing.
+  </p>
+
+  <div class="controls">
+    <label for="rule">Assignment rule (who gets cleaned, D&nbsp;=&nbsp;1):</label>
+    <select id="rule">
+      <option value="perfect">Perfect Regulator &mdash; clean iff &delta; &gt; 0</option>
+      <option value="bad">Bad Regulator &mdash; clean iff &delta; &lt; 0</option>
+      <option value="random">Random &mdash; coin flip</option>
+      <option value="even">Clean even-numbered sites</option>
+      <option value="all">Clean everyone</option>
+      <option value="none">Clean no one</option>
+      <option value="manual">Manual &mdash; toggle the D column</option>
+    </select>
+    <button id="reseed">New random draw</button>
+    <button id="reset">Reset data</button>
+    <button class="primary" id="addrow">Add site</button>
+  </div>
+
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th>Site</th>
+        <th>Y<sup>1</sup> (cleaned)</th>
+        <th>Y<sup>0</sup> (not)</th>
+        <th>&delta; = Y<sup>1</sup>&minus;Y<sup>0</sup></th>
+        <th>D (cleaned?)</th>
+        <th>Y (observed)</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <h2>What you can compute (the true parameters)</h2>
+  <div class="grid">
+    <div class="card"><div class="k">ATE</div><div class="v" id="ate">&middot;</div></div>
+    <div class="card"><div class="k">ATT (cleaned)</div><div class="v" id="att">&middot;</div></div>
+    <div class="card"><div class="k">ATU (not cleaned)</div><div class="v" id="atu">&middot;</div></div>
+    <div class="card"><div class="k">&pi; (share cleaned)</div><div class="v" id="pi">&middot;</div></div>
+  </div>
+
+  <h2>What a naive comparison gives you</h2>
+  <div class="grid">
+    <div class="card"><div class="k">E[Y | D=1]</div><div class="v" id="ey1">&middot;</div></div>
+    <div class="card"><div class="k">E[Y | D=0]</div><div class="v" id="ey0">&middot;</div></div>
+    <div class="card"><div class="k">SDO = E[Y|D=1] &minus; E[Y|D=0]</div><div class="v" id="sdo">&middot;</div></div>
+  </div>
+
+  <div class="decomp">
+    <div style="font-weight:700; margin-bottom:6px">Decomposition of the SDO</div>
+    <div class="row">
+      <span class="term sdo">SDO&nbsp;<b id="d_sdo">&middot;</b></span> =
+      <span class="term ate">ATE&nbsp;<b id="d_ate">&middot;</b></span> +
+      <span class="term sel">selection bias&nbsp;<b id="d_sel">&middot;</b></span> +
+      <span class="term het">heterogeneity bias&nbsp;<b id="d_het">&middot;</b></span>
+    </div>
+    <div class="note">
+      selection bias = E[Y<sup>0</sup>|D=1] &minus; E[Y<sup>0</sup>|D=0]&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      heterogeneity bias = (1&minus;&pi;)(ATT &minus; ATU)
+    </div>
+    <div class="check" id="check">&middot;</div>
+  </div>
+
+  <h2>Things to try</h2>
+  <ul style="font-size:.92rem">
+    <li>Start with the <b>Perfect Regulator</b>. Note that cleanup helps on average
+      (ATE&nbsp;&gt;&nbsp;0) yet the SDO is <em>negative</em>: targeting the neediest
+      sites makes cleanup look harmful.</li>
+    <li>Switch to <b>Random</b>. Selection bias and heterogeneity bias collapse toward
+      zero and SDO &rarr; ATE. That is what randomization buys you.</li>
+    <li>Switch to <b>Bad Regulator</b>. Now the bias flips sign.</li>
+    <li>Edit the Y<sup>0</sup> column so the cleaned sites start out much worse off and
+      watch selection bias grow.</li>
+  </ul>
+
+  <footer>
+    Adapted from Scott Cunningham, <em>Perfect Doctor Exercise</em> (Mixtape Sessions).
+    Built as a teaching sandbox &mdash; all "data" are made up.
+  </footer>
+</div>
+
+<script>
+// ---- default data: contaminated sites with both potential outcomes ----------
+// Designed so the Perfect Regulator (clean iff delta>0) yields ATE>0 but SDO<0:
+// the neediest sites (low Y0) are exactly the ones cleaned, so a naive treated-
+// vs-control comparison understates -- and here reverses -- the true effect.
+const DEFAULT = [
+  ["Austin",          7, 1],
+  ["Fredericksburg",  5, 6],
+  ["Washington, D.C.",5, 1],
+  ["Eau Claire",      7, 8],
+  ["St. Louis",       8, 3],
+  ["Brunswick",       6, 7],
+  ["Williamstown",    6, 2],
+  ["Ithaca",          9,10],
+];
+let data = DEFAULT.map(r => ({name:r[0], y1:r[1], y0:r[2], d:0, manual:0}));
+const $ = id => document.getElementById(id);
+const fmt = x => (Math.round(x*100)/100).toString();
+const mean = a => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0;
+
+function assign(){
+  const rule = $('rule').value;
+  data.forEach((r,i)=>{
+    const delta = r.y1 - r.y0;
+    switch(rule){
+      case 'perfect': r.d = delta>0?1:0; break;
+      case 'bad':     r.d = delta<0?1:0; break;
+      case 'random':  r.d = Math.random()<0.5?1:0; break;
+      case 'even':    r.d = ((i+1)%2===0)?1:0; break;
+      case 'all':     r.d = 1; break;
+      case 'none':    r.d = 0; break;
+      case 'manual':  r.d = r.manual?1:0; break;
+    }
+  });
+}
+
+function compute(){
+  const delta = data.map(r=>r.y1-r.y0);
+  const ate = mean(delta);
+  const T = data.filter(r=>r.d===1), C = data.filter(r=>r.d===0);
+  const att = T.length ? mean(T.map(r=>r.y1-r.y0)) : NaN;
+  const atu = C.length ? mean(C.map(r=>r.y1-r.y0)) : NaN;
+  const pi  = data.length ? T.length/data.length : 0;
+  const eY1 = T.length ? mean(T.map(r=>r.y1)) : NaN;   // observed Y for treated = Y1
+  const eY0 = C.length ? mean(C.map(r=>r.y0)) : NaN;   // observed Y for control = Y0
+  const sdo = eY1 - eY0;
+  // decomposition pieces
+  const eY0_T = T.length ? mean(T.map(r=>r.y0)) : NaN;
+  const eY0_C = C.length ? mean(C.map(r=>r.y0)) : NaN;
+  const sel = eY0_T - eY0_C;                            // E[Y0|D=1]-E[Y0|D=0]
+  const het = (1-pi)*(att-atu);
+  return {ate,att,atu,pi,eY1,eY0,sdo,sel,het};
+}
+
+function render(){
+  assign();
+  // table
+  const tb = $('rows'); tb.innerHTML='';
+  data.forEach((r,i)=>{
+    const tr = document.createElement('tr');
+    if(r.d===1) tr.className='treated';
+    const delta = r.y1-r.y0;
+    const Y = r.d*r.y1 + (1-r.d)*r.y0;
+    const manualToggle = ($('rule').value==='manual')
+      ? `<button data-i="${i}" class="togg">${r.d? 'D=1':'D=0'}</button>`
+      : `<span class="pill ${r.d?'t':'c'}">${r.d?'D=1':'D=0'}</span>`;
+    tr.innerHTML = `
+      <td class="name">${r.name}</td>
+      <td><input class="po" data-i="${i}" data-f="y1" type="number" value="${r.y1}"></td>
+      <td><input class="po" data-i="${i}" data-f="y0" type="number" value="${r.y0}"></td>
+      <td>${delta>0?'+':''}${fmt(delta)}</td>
+      <td>${manualToggle}</td>
+      <td>${fmt(Y)}</td>`;
+    tb.appendChild(tr);
+  });
+  // wire inputs
+  document.querySelectorAll('input.po').forEach(inp=>{
+    inp.addEventListener('change',e=>{
+      const i=+e.target.dataset.i, f=e.target.dataset.f;
+      data[i][f]=parseFloat(e.target.value)||0; render();
+    });
+  });
+  document.querySelectorAll('button.togg').forEach(b=>{
+    b.addEventListener('click',e=>{
+      const i=+e.target.dataset.i; data[i].manual = data[i].manual?0:1; render();
+    });
+  });
+  // stats
+  const s = compute();
+  $('ate').textContent=fmt(s.ate); $('att').textContent=isNaN(s.att)?'--':fmt(s.att);
+  $('atu').textContent=isNaN(s.atu)?'--':fmt(s.atu); $('pi').textContent=fmt(s.pi);
+  $('ey1').textContent=isNaN(s.eY1)?'--':fmt(s.eY1); $('ey0').textContent=isNaN(s.eY0)?'--':fmt(s.eY0);
+  $('sdo').textContent=isNaN(s.sdo)?'--':fmt(s.sdo);
+  $('d_sdo').textContent=isNaN(s.sdo)?'--':fmt(s.sdo);
+  $('d_ate').textContent=fmt(s.ate);
+  $('d_sel').textContent=isNaN(s.sel)?'--':fmt(s.sel);
+  $('d_het').textContent=isNaN(s.het)?'--':fmt(s.het);
+  // check identity
+  const chk=$('check');
+  if(isNaN(s.sdo)||isNaN(s.sel)||isNaN(s.het)){
+    chk.textContent='Need at least one cleaned and one not-cleaned site to form the SDO.';
+    chk.className='check no';
+  } else {
+    const rhs = s.ate+s.sel+s.het;
+    const ok = Math.abs(rhs-s.sdo)<1e-9;
+    chk.textContent = ok
+      ? `Identity holds: ${fmt(s.ate)} + ${fmt(s.sel)} + ${fmt(s.het)} = ${fmt(s.sdo)} ✓`
+      : `${fmt(rhs)} vs ${fmt(s.sdo)}`;
+    chk.className = 'check '+(ok?'ok':'no');
+  }
+}
+
+$('rule').addEventListener('change',render);
+$('reseed').addEventListener('click',()=>{ if($('rule').value!=='random') $('rule').value='random'; render(); });
+$('reset').addEventListener('click',()=>{ data=DEFAULT.map(r=>({name:r[0],y1:r[1],y0:r[2],d:0,manual:0})); render(); });
+$('addrow').addEventListener('click',()=>{
+  const n=data.length+1;
+  data.push({name:'Site '+n, y1:Math.round(Math.random()*15+1), y0:Math.round(Math.random()*15+1), d:0, manual:0});
+  render();
+});
+render();
+</script>
+</body>
+</html>
